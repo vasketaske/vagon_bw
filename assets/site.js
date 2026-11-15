@@ -19,7 +19,7 @@ function renderMenu(){
   const items=raw[category].filter(item=>!query||normalize(category+' '+item.join(' ')).includes(query));
   count+=items.length;
   if(!items.length)return '';
-  return `<section><div class="category-heading"><h3>${safe(category)}</h3><span>${items.length} ${itemLabel(items.length)}</span></div><div class="menu-items">${items.map(([name,price,description])=>`<article class="menu-item"><div><h4>${safe(name)}</h4><strong>${priceFormat.format(price)} RSD</strong></div>${description?`<p>${safe(description)}</p>`:''}</article>`).join('')}</div></section>`;
+  return `<section><div class="category-heading"><h3>${safe(category)}</h3><span>${items.length} ${itemLabel(items.length)}</span></div><div class="menu-items">${items.map(([name,price,description],index)=>`<article class="menu-item" style="--item-index:${Math.min(index,7)}"><div><h4>${safe(name)}</h4><strong>${priceFormat.format(price)} RSD</strong></div>${description?`<p>${safe(description)}</p>`:''}</article>`).join('')}</div></section>`;
  }).join('');
  results.innerHTML=(query&&count?`<p class="result-count">Pronađeno stavki: ${count}</p>`:'')+(sections||'<p class="empty-result">Nema rezultata. Pokušajte sa drugim nazivom jela ili sastojka.</p>');
 }
@@ -27,7 +27,7 @@ function closeNavigation(){document.getElementById('mobile-nav').hidden=true;doc
 function openMenu(category){
  lastFocus=document.activeElement.closest('#mobile-nav')?document.querySelector('.hamb'):document.activeElement;
  current=categories.includes(category)?category:'Doručak';search.value='';renderMenu();closeNavigation();
- document.getElementById('vagon-film').pause();dialog.showModal();document.body.classList.add('dialog-open');dialogContent.scrollTop=0;closeButton.focus();
+ document.getElementById('vagon-film').pause();document.getElementById('hero-loop').pause();dialog.showModal();document.body.classList.add('dialog-open');dialogContent.scrollTop=0;closeButton.focus();
  const active=categoryNav.querySelector('.active');if(active)active.scrollIntoView({block:'nearest',inline:'center'});
 }
 document.querySelectorAll('[data-menu]').forEach(button=>button.addEventListener('click',()=>openMenu()));
@@ -36,7 +36,7 @@ categoryNav.addEventListener('click',event=>{const button=event.target.closest('
 search.addEventListener('input',renderMenu);
 closeButton.addEventListener('click',()=>dialog.close());
 dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();dialog.close()}});
-dialog.addEventListener('close',()=>{document.body.classList.remove('dialog-open');lastFocus?.focus({preventScroll:true})});
+dialog.addEventListener('close',()=>{document.body.classList.remove('dialog-open');lastFocus?.focus({preventScroll:true});syncLoop()});
 dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const bounds=dialog.getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)dialog.close()});
 const hamburger=document.querySelector('.hamb');const mobileNav=document.getElementById('mobile-nav');
 hamburger.addEventListener('click',()=>{const open=mobileNav.hidden;mobileNav.hidden=!open;hamburger.setAttribute('aria-expanded',String(open))});
@@ -52,7 +52,7 @@ if(!reduced.matches&&'IntersectionObserver' in window){
  reduced.addEventListener('change',event=>{if(event.matches){document.body.classList.remove('motion-ready');observer.disconnect()}});
 }
 const progress=document.querySelector('.scroll-progress');let ticking=false;
-function updateProgress(){const max=document.documentElement.scrollHeight-window.innerHeight;progress.style.transform=`scaleX(${max>0?window.scrollY/max:0})`;ticking=false}
+function updateProgress(){const max=document.documentElement.scrollHeight-window.innerHeight;progress.style.transform=`scaleX(${max>0?window.scrollY/max:0})`;if(!reduced.matches&&!document.body.classList.contains('motion-paused')){document.querySelectorAll('.photo-crop').forEach(frame=>{const rect=frame.getBoundingClientRect();if(rect.bottom>0&&rect.top<innerHeight){const shift=Math.max(-18,Math.min(18,(innerHeight/2-rect.top)*.035));frame.style.setProperty('--photo-shift',shift+'px')}})}ticking=false}
 window.addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(updateProgress)}},{passive:true});window.addEventListener('resize',updateProgress);updateProgress();
 const video=document.getElementById('vagon-film');const play=document.getElementById('film-play');
 play.addEventListener('click',async()=>{try{await video.play();play.hidden=true;video.focus({preventScroll:true})}catch{play.querySelector('span').textContent='POKUŠAJTE PONOVO'}});
@@ -60,3 +60,13 @@ video.addEventListener('play',()=>{play.hidden=true});video.addEventListener('en
 const videoObserver=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(!entry.isIntersecting&&!video.paused)video.pause()})},{threshold:.05});videoObserver.observe(video);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)video.pause()});
 renderMenu();
+
+const heroLoop=document.getElementById('hero-loop');
+const motionToggle=document.getElementById('motion-toggle');
+let loopVisible=true,motionPaused=false;
+function syncLoop(){if(!loopVisible||reduced.matches||motionPaused||document.hidden||dialog.open){heroLoop.pause()}else{heroLoop.play().catch(()=>{})}}
+const loopObserver=new IntersectionObserver(entries=>{loopVisible=entries[0].isIntersecting;syncLoop()},{threshold:.15});loopObserver.observe(heroLoop);
+reduced.addEventListener('change',syncLoop);
+document.addEventListener('visibilitychange',syncLoop);
+motionToggle.addEventListener('click',()=>{motionPaused=!motionPaused;document.body.classList.toggle('motion-paused',motionPaused);motionToggle.setAttribute('aria-pressed',String(motionPaused));motionToggle.setAttribute('aria-label',motionPaused?'Nastavi animacije i video isečak':'Pauziraj animacije i video isečak');motionToggle.innerHTML=motionPaused?'<span class="motion-symbol is-play" aria-hidden="true"></span> NASTAVI':'<span class="motion-symbol" aria-hidden="true"></span> PAUZIRAJ';syncLoop()});
+syncLoop();
